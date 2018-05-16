@@ -1,9 +1,7 @@
 # This contains utility that generate patches from 3D volume
 #%% Import libraries
 import numpy as np
-import tensorflow as tf
-import SimpleITK as sitk
-from scipy import ndimage, misc
+import resample_util
 
 #%% Utility functions
 
@@ -18,7 +16,7 @@ from scipy import ndimage, misc
 #   num_negative: number of negative background patches that doesn't contain lesion to sample.
 # output:
 #   patches_pos, patches_neg: list of (img_patch, seg_patch, cpt)
-def single_res_patcher_3D(image, seg, patch_size, is_training = True, num_pos = 10, num_neg = 10, spacing = [1, 1, 1]):
+def single_resolution_patcher_3D(image, seg, patch_size, is_training = True, num_pos = 10, num_neg = 10, spacing = [1, 1, 1]):
     if is_training:
         # Randomly sample center points
         cpts_pos_sampled, cpts_neg_sampled = sample_center_points(seg, num_pos, num_neg)
@@ -35,7 +33,8 @@ def single_res_patcher_3D(image, seg, patch_size, is_training = True, num_pos = 
         return patches
         
 
-# This function sample 3D patches from 3D volume in multiple resolution around same center    
+# This function sample 3D patches from 3D volume in multiple resolution around same center, used deepmedic or 
+# similar style network
 # input:
 #   image: the image in numpy array, dimension [H, W, D, C] 
 #   seg: segmentation of the image, dimension [H, W, D], right now assuming this is binary    
@@ -58,7 +57,7 @@ def multi_resolution_patcher_3D(image, seg, patchsize_multi_res, is_training = T
         for idx, pr in enumerate(patchsize_multi_res):
             res, patch_size = pr
             # Downsample the image and segmentation
-            image_resize, seg_resize = resample_image(image, seg, res)
+            image_resize, seg_resize = resample_util.resample_by_resolution(image, seg, res)
             
             # Fetch positive patches
             cpts_pos = cpts_pos_multi_res[idx]
@@ -80,7 +79,7 @@ def multi_resolution_patcher_3D(image, seg, patchsize_multi_res, is_training = T
         for idx, pr in enumerate(patchsize_multi_res):
             res, patch_size = pr
             # Downsample the image and segmentation
-            image_resize, seg_resize = resample_image(image, seg, res)
+            image_resize, seg_resize = resample_util.resample_by_resolution(image, seg, res)
             
             # Fetch positive patches
             cpts_res = cpts_multi_res[idx]
@@ -162,14 +161,3 @@ def crop_patch_by_cpts(image, seg, cpts, patch_size):
         seg_patch = seg_padded[l[0]:u[0], l[1]:u[1], l[2]:u[2]]
         patches.append((img_patch, seg_patch, cpt))
     return patches
-
-# This function uses tensorflow implementation of tri-linear interpolation to resample image
-# input:
-#   image: input image, [H, W, D, C]
-#   seg: segmentation, [H, W, D]
-#   res: the resolution
-def resample_image(image, seg, res):
-    image_resize = ndimage.zoom(image, (res, res, res, 1.0), order = 1)
-    seg_resize = ndimage.zoom(seg, (res, res, res, 1.0), order = 0)
-    
-    return image_resize, seg_resize
